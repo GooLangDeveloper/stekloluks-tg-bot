@@ -14,8 +14,9 @@ import (
 )
 
 var (
-	botToken    string
-	adminChatID int64
+	botToken         string
+	adminChatID      int64 = 433873179 // ID админа СТЕКЛОЛЮКС
+	managerUsername  string = "@GXDVMN" // Ник менеджера
 
 	pendingReminders = make(map[int64]time.Time)
 	mu               sync.Mutex
@@ -25,16 +26,7 @@ func main() {
 	// === ENV ===
 	botToken = os.Getenv("BOT_TOKEN")
 	if botToken == "" {
-		log.Fatal("BOT_TOKEN не установлен")
-	}
-
-	adminID := os.Getenv("ADMIN_CHAT_ID")
-	if adminID == "" {
-		log.Fatal("ADMIN_CHAT_ID не установлен")
-	}
-
-	if _, err := fmt.Sscanf(adminID, "%d", &adminChatID); err != nil {
-		log.Fatalf("Некорректный ADMIN_CHAT_ID: %v", err)
+		log.Fatal("BOT_TOKEN не установлен. Укажите токен вашего бота.")
 	}
 
 	// === BOT INIT ===
@@ -52,7 +44,7 @@ func main() {
 
 	go reminderWorker(ctx, bot)
 
-	log.Println("Bot started")
+	log.Println("Bot Stekloluks started")
 
 	for {
 		select {
@@ -77,16 +69,19 @@ func main() {
 func handleMessage(bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 	chatID := msg.Chat.ID
 
-	// Контакт
+	// Обработка отправленного контакта
 	if msg.Contact != nil {
 		mu.Lock()
 		delete(pendingReminders, chatID)
 		mu.Unlock()
 
+		// Пересылаем контакт админу
 		forward := tgbotapi.NewForward(adminChatID, chatID, msg.MessageID)
 		bot.Send(forward)
 
-		confirm := tgbotapi.NewMessage(chatID, "Спасибо. Менеджер свяжется с вами в Telegram.")
+		// Подтверждение пользователю
+		confirmText := fmt.Sprintf("Спасибо за обращение! Ваш контакт получен. Наш менеджер %s свяжется с вами в ближайшее время для обсуждения деталей поставки.", managerUsername)
+		confirm := tgbotapi.NewMessage(chatID, confirmText)
 		confirm.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
 		bot.Send(confirm)
 		return
@@ -136,9 +131,6 @@ func handleCallback(bot *tgbotapi.BotAPI, cb *tgbotapi.CallbackQuery) {
 	case "faq_4":
 		sendText(bot, chatID, faq4())
 
-	case "faq_5":
-		sendText(bot, chatID, faq5())
-
 	case "back":
 		sendStart(bot, chatID)
 
@@ -146,21 +138,20 @@ func handleCallback(bot *tgbotapi.BotAPI, cb *tgbotapi.CallbackQuery) {
 		requestContact(bot, chatID)
 	}
 
+	// Отвечаем на коллбэк, чтобы убрать "часики" на кнопке в Telegram
 	bot.Request(tgbotapi.NewCallback(cb.ID, ""))
 }
 
 // ================= UI =================
 
 func sendStart(bot *tgbotapi.BotAPI, chatID int64) {
-	text := `👋🏻 Добро пожаловать в Pro-traffic.
+	text := `🏭 Добро пожаловать в СТЕКЛОЛЮКС!
 
-Чтобы оставить заявку на продвижение,
-нажмите кнопку ниже — мы напишем вам в Telegram.
+Мы — ваш надежный промышленный партнёр в мире силиката. 
 
-Если нужно задать вопрос или связаться с менеджером,
-используйте соответствующий раздел.
+Специализируемся на производстве жидкого стекла и силикатной глыбы под любые задачи вашего производства с гарантией соблюдения ГОСТ и лабораторным контролем.
 
-Без звонков и навязывания.`
+Выберите интересующий вас раздел ниже, чтобы узнать подробнее или запросить расчет стоимости.`
 
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ReplyMarkup = mainMenu()
@@ -168,18 +159,17 @@ func sendStart(bot *tgbotapi.BotAPI, chatID int64) {
 }
 
 func sendAbout(bot *tgbotapi.BotAPI, chatID int64) {
-	text := `Pro-traffic — это новая модель продвижения бизнеса в цифровом маркетинге.
+	text := `🏢 О компании СТЕКЛОЛЮКС
 
-Наша миссия — сделать маркетинг доступным
-и экономически оправданным для малого и среднего бизнеса.
+Мы обеспечиваем промышленные предприятия качественным силикатным сырьем в любых объемах. 
 
-Мы убрали всё, что раздувает стоимость услуг:
-посредников, лишние роли и уровни согласований.
+Наши главные принципы:
+🔬 Собственный лабораторный контроль на каждом этапе.
+📜 Строгое соответствие стандартам ГОСТ.
+🏭 Готовность к промышленным объемам поставок.
+🤝 Адаптация продукции конкретно под ваши производственные нужды.
 
-В проекте участвуют только те,
-кто напрямую влияет на результат:
-вы, ваш бизнес, ИИ и специалисты,
-которые реально работают над продвижением.`
+Оставьте заявку, и мы подготовим для вас индивидуальное коммерческое предложение.`
 
 	sendText(bot, chatID, text)
 }
@@ -187,26 +177,23 @@ func sendAbout(bot *tgbotapi.BotAPI, chatID int64) {
 func sendFAQMenu(bot *tgbotapi.BotAPI, chatID int64) {
 	keyboard := tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Как устроена работа", "faq_1"),
+			tgbotapi.NewInlineKeyboardButtonData("📦 Какую продукцию вы производите?", "faq_1"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Почему нет менеджеров", "faq_2"),
+			tgbotapi.NewInlineKeyboardButtonData("🔬 Как проверяется качество?", "faq_2"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Почему ИИ, а не дизайнер", "faq_3"),
+			tgbotapi.NewInlineKeyboardButtonData("🚚 Какие объемы можете поставлять?", "faq_3"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Подойдёт ли формат", "faq_4"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Что после заявки", "faq_5"),
+			tgbotapi.NewInlineKeyboardButtonData("📞 Как связаться напрямую?", "faq_4"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
 			tgbotapi.NewInlineKeyboardButtonData("⬅️ Назад", "back"),
 		),
 	)
 
-	msg := tgbotapi.NewMessage(chatID, "Частые вопросы:")
+	msg := tgbotapi.NewMessage(chatID, "📋 Информация и частые вопросы:")
 	msg.ReplyMarkup = keyboard
 	bot.Send(msg)
 }
@@ -216,10 +203,10 @@ func requestContact(bot *tgbotapi.BotAPI, chatID int64) {
 	pendingReminders[chatID] = time.Now()
 	mu.Unlock()
 
-	msg := tgbotapi.NewMessage(chatID, "Нажмите кнопку ниже, чтобы отправить контакт.")
+	msg := tgbotapi.NewMessage(chatID, "Нажмите кнопку ниже, чтобы поделиться контактом для связи с отделом продаж.")
 	keyboard := tgbotapi.NewReplyKeyboard(
 		tgbotapi.NewKeyboardButtonRow(
-			tgbotapi.NewKeyboardButtonContact("📞 Отправить контакт"),
+			tgbotapi.NewKeyboardButtonContact("📞 Отправить мой номер телефона"),
 		),
 	)
 	keyboard.ResizeKeyboard = true
@@ -237,20 +224,16 @@ func sendText(bot *tgbotapi.BotAPI, chatID int64, text string) {
 // ================= MENUS =================
 
 func mainMenu() tgbotapi.InlineKeyboardMarkup {
-	helloMsg := "Здравствуйте! Меня интересуют ваши услуги по продвижению. Расскажите, пожалуйста, подробнее."
-	link := "https://t.me/Kmrtva?text=" + helloMsg
-	
 	return tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("🚀 Оставить заявку", "leave_contact"),
+			tgbotapi.NewInlineKeyboardButtonData("📝 Оставить заявку на расчет", "leave_contact"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("❓ FAQ", "faq"),
-			tgbotapi.NewInlineKeyboardButtonData("ℹ️ О компании", "about"),
+			tgbotapi.NewInlineKeyboardButtonData("🏭 О компании", "about"),
+			tgbotapi.NewInlineKeyboardButtonData("📋 Продукция и FAQ", "faq"),
 		),
 		tgbotapi.NewInlineKeyboardRow(
-			// Новая кнопка прямой связи
-			tgbotapi.NewInlineKeyboardButtonURL("💬 Написать менеджеру напрямую", link),
+			tgbotapi.NewInlineKeyboardButtonURL("👨‍💼 Написать менеджеру", "https://t.me/GXDVMN"),
 		),
 	)
 }
@@ -258,7 +241,7 @@ func mainMenu() tgbotapi.InlineKeyboardMarkup {
 func backMenu() tgbotapi.InlineKeyboardMarkup {
 	return tgbotapi.NewInlineKeyboardMarkup(
 		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("⬅️ Назад", "back"),
+			tgbotapi.NewInlineKeyboardButtonData("⬅️ Назад в меню", "back"),
 		),
 	)
 }
@@ -266,53 +249,37 @@ func backMenu() tgbotapi.InlineKeyboardMarkup {
 // ================= FAQ TEXTS =================
 
 func faq1() string {
-	return `Мы работаем по компактной и эффективной модели.
+	return `📦 ПРОДУКЦИЯ
 
-В проекте участвуют:
-— ИИ для анализа ниши, конкурентов и офферов
-— таргетолог как технический специалист
-— маркетолог, отвечающий за стратегию и воронку
-— ИИ-инструменты для создания и тестирования креативов
+Мы производим и поставляем:
+— Жидкое натриевое стекло
+— Силикатную глыбу
 
-Без лишних ролей и посредников.`
+Наше сырье отлично подходит под задачи производства строительных материалов, литейного производства, химической промышленности и других сфер.`
 }
 
 func faq2() string {
-	return `Такие роли оправданы при масштабировании крупных команд.
+	return `🔬 КОНТРОЛЬ КАЧЕСТВА
 
-Для малого и среднего бизнеса
-они часто увеличивают стоимость,
-не влияя напрямую на результат.
+Каждая партия сопровождается строгим лабораторным контролем. Мы гарантируем полное соответствие ГОСТ и предоставляем паспорта качества.
 
-Мы выстроили процесс
-с прямой и понятной коммуникацией
-между бизнесом и специалистами.`
+Физико-химические показатели силиката могут быть скорректированы индивидуально под ваши технологические процессы.`
 }
 
 func faq3() string {
-	return `ИИ — это рациональный инструмент.
+	return `🚚 ОБЪЕМЫ ПОСТАВОК
 
-Он позволяет быстрее создавать креативы,
-тестировать больше гипотез
-и направлять бюджет в рекламу,
-а не в содержание штата.`
+Стекклюкс ориентирован на работу с B2B-сектором. Производственные мощности позволяют нам бесперебойно отгружать продукцию в промышленных объемах.
+
+Мы ценим стабильность и готовы обсуждать долгосрочные контракты.`
 }
 
 func faq4() string {
-	return `Формат подойдёт,
-если у вас малый или средний бизнес
-и нужен понятный запуск рекламы
-без перегруженных процессов.`
-}
+	return fmt.Sprintf(`📞 СВЯЗЬ И ЗАКАЗЫ
 
-func faq5() string {
-	return `После того как вы оставите контакт,
-менеджер свяжется с вами в Telegram.
+Если у вас нестандартный запрос или вы хотите оперативно обсудить условия поставки, вы можете написать нашему менеджеру напрямую: %s
 
-Мы уточним задачу
-и предложим дальнейшие шаги.
-
-Без звонков и навязывания.`
+Или просто оставьте свой контакт через кнопку "Оставить заявку", и мы перезвоним в рабочее время.`, managerUsername)
 }
 
 // ================= REMINDER =================
@@ -331,23 +298,23 @@ func reminderWorker(ctx context.Context, bot *tgbotapi.BotAPI) {
 
 			mu.Lock()
 			for chatID, ts := range pendingReminders {
+				// Напоминание через 24 часа, если человек нажал "Оставить заявку", но не скинул контакт
 				if now.Sub(ts) >= 24*time.Hour {
-					text := `Напоминаем, что вы можете задать вопрос по рекламе.
+					text := fmt.Sprintf(`Здравствуйте! Вчера вы планировали оставить заявку на поставку силикатной продукции.
 
-Если решите оставить заявку —
-для вас действует разовая скидка 10%.
+Если у вас остались вопросы по объемам, ГОСТам или ценам, наш менеджер готов проконсультировать вас напрямую: %s
 
-Промокод: protraff-2026
-Просто укажите его менеджеру при общении.`
+Или нажмите кнопку ниже, чтобы мы сами связались с вами.`, managerUsername)
 
 					msg := tgbotapi.NewMessage(chatID, text)
 					msg.ReplyMarkup = tgbotapi.NewInlineKeyboardMarkup(
 						tgbotapi.NewInlineKeyboardRow(
-							tgbotapi.NewInlineKeyboardButtonData("🚀 Оставить заявку", "leave_contact"),
+							tgbotapi.NewInlineKeyboardButtonData("📝 Отправить контакт", "leave_contact"),
 						),
 					)
 
 					bot.Send(msg)
+					// Удаляем из мапы, чтобы не спамить каждый день
 					delete(pendingReminders, chatID)
 				}
 			}
