@@ -80,7 +80,7 @@ func handleMessage(bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
 		bot.Send(forward)
 
 		// Подтверждение пользователю
-		confirmText := fmt.Sprintf("Спасибо за обращение! Ваш контакт получен. Наш менеджер %s свяжется с вами в ближайшее время для обсуждения деталей поставки.", managerUsername)
+		confirmText := fmt.Sprintf("Спасибо за обращение! Ваш контакт получен. Наш менеджер свяжется с вами в ближайшее время для обсуждения деталей поставки.")
 		confirm := tgbotapi.NewMessage(chatID, confirmText)
 		confirm.ReplyMarkup = tgbotapi.NewRemoveKeyboard(true)
 		bot.Send(confirm)
